@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <!-- USER SELECTION -->
+    <div id="userSelect">
+        <label for="user">User:</label>
+        <select name="user" id="user" onchange="readUser()">
+            <option value=0 selected>User 1</option>
+            <option value=1>User 2</option>
+            <option value=2>User 3</option>
+        </select> 
+
+        <br />
+        
+        <label>Notification Channels: </label>
+        <br />
+        <label for="CONSOLE">Console: </label>
+        <input type="checkbox" id="CONSOLE" onclick="setNotifications()">
+        <label for="EMAIL">Email: </label>
+        <input type="checkbox" id="EMAIL" onclick="setNotifications()">
+        <label for="SMS">SMS: </label>
+        <input type="checkbox" id="SMS" onclick="setNotifications()">
+        <hr>
+    </div>
+
+
+
+    <!-- MARKET FEED -->
+    <div id="marketFeed">
+        <h2>Market</h2>
+
+        <label for="strat">Mode: </label>
+        <select name="strat" id="strat" onchange="readStrategy()">
+            <option value="CONSTANT">Constant Price</option>
+            <option value="RANDOM">Random Walk</option>
+            <option value="MEAN">Mean-Following</option>
+            <option value="TREND">Trend-Following</option>
+            <option value="INCREASING">Increasing Price</option>
+            <option value="DECREASING">Decreasing Price</option>
+        </select>
+
+        <ul id="listings">
+            <li>:3 is UP!!!!!!!</li>
+        </ul>
+        <hr>
+    </div>
+
+
+    <!-- ORDERING -->
+    <div id="OrderingCont"> 
+        <h3>Ordering</h3>
+        <form>
+            <label for="holding">Holding: </label>
+            <select name="holding" id="holding">
+                <option value=":3" selected>:3</option>
+            </select> 
+
+            <label for="amount">Amount: </label>
+            <input type="number" step="1" min="1" placeholder="1" id="amount" oninput="this.value = Math.max(this.value, 1)" required/>
+
+            <label for="limit">Limit: $</label>
+            <input type="number" step="0.01" min="0" placeholder="0.00" id="limit" onblur="this.value = Math.max(parseFloat(this.value), 0).toFixed(2)" required/>
+
+            <br />
+
+            <input type="radio" id="marketOrder" name="type" value="MARKET" checked/>
+            <label for="marketOrder">Market Order</label>
+
+            <input type="radio" id="limitOrder" name="type" value="LIMIT" />
+            <label for="limitOrder">Limit Order</label>
+
+            <br />
+
+            <button type="button" onclick="submitBuyOrder()">Buy</button>
+            <button type="button" onclick="submitSellOrder()">Sell</button>
+        </form>
+        <hr>
+    </div>
+       
+        
+
+
+    <!-- USER PORTFOLIO -->
+    <div id="portfolio">
+        <h3>Holdings</h3>
+        <ul id="holdings">
+            <li>:3  100000000</li>
+        </ul>
+    </div>
+    <div id="valueCone">
+        <p id="balance">Balance: BROKE!!!!!!!</p>
+        <p id="appraisal">Holdings Value: NOTHING!!!!!!!!</p>
+        <p id="totalValue">Total Value: ZERO DOLAR!!!!!!!!!!</p>
+        <hr>
+    </div>
+
+
+    <!-- PENDING ORDERS -->
+    <div id="orderList">
+        <h4>Pending Orders</h4>
+        <ul id="orders">
+            <li>:3 at 10000 dolar</li>
+        </ul>
+        <hr>
+    </div>
+    
+
+
+    <!-- HISTORY -->
+    <div id="historyCont">
+        <h4>History</h4>
+        <ul id="history">
+            <li>bought 1000 :3 for 10000 dolar</li>
+        </ul>
+        <hr>
+    </div>
+
+
+
+    <!-- SCRIPTS -->
+    <script>
+        //dont include the trailing slash!!
+        //let host = "https://tradesimulator-theextracrispy.onrender.com";
+        let host = "http://localhost:8080";
+
+        //STRATEGY READ
+        let currentStrat = "CONSTANT";
+        function readStrategy() {
+            let stratSelection = document.getElementById("strat");
+            currentStrat = stratSelection.value;
+            setStrategy();
+            RefreshEVERYTHING();
+        }
+
+
+        //USER READ
+        let currentUser = 0;
+        function readUser() {
+            let userSelection = document.getElementById("user");
+            currentUser = userSelection.value;
+            RefreshEVERYTHING();
+        }
+
+
+        //NOTIFICATIONS
+        async function readNotifications() {
+            let request = {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(currentUser)
+            };
+            let response = await fetch(host + "/notif/read", request);    
+            let data = await response.json();
+            let enabledSet = Object.entries(data.enabled);
+            enabledSet.forEach(checkBoxes);
+        }
+
+        function checkBoxes([key, value]){
+            let box = document.getElementById(key);
+            box.checked = value;
+        }
+
+        async function setNotifications() {
+            let consoleCheckbox = document.getElementById("CONSOLE");
+            let emailCheckbox = document.getElementById("EMAIL");
+            let smsCheckbox = document.getElementById("SMS");
+
+            let consoleEnabled = consoleCheckbox.checked;
+            let emailEnabled = emailCheckbox.checked;
+            let smsEnabled = smsCheckbox.checked;
+            
+            let notifStruct = {
+                uid: currentUser, 
+                enabled: {
+                    "CONSOLE": consoleEnabled, 
+                    "EMAIL": emailEnabled, 
+                    "SMS": smsEnabled
+                }
+            };
+
+            let request = {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(notifStruct)
+            };
+            let response = await fetch(host + "/notif/set", request);
+        }
+
+
+        //MARKET FEED
+        let global_listings = [];
+        async function getListings() {
+            let request = {
+                method: "GET",
+            };
+            let response = await fetch(host + "/feed", request);    
+            let data = await response.json();
+            let listings = Object.entries(data);
+
+            //listing market values
+            let list = document.getElementById("listings");
+            list.innerHTML = "";
+            listings.forEach(displayListing);
+        }
+        function displayListing([key, value]){
+            let cents = value;
+            let dollars = cents / 100;
+
+            let list = document.getElementById("listings");
+            let li = document.createElement('li');
+            li.textContent = `${key} : $${dollars.toFixed(2)}`;
+            list.appendChild(li);
+        }
+        
+        //getting all available listings
+        async function getAvailable() {
+            let request = {
+                method: "GET",
+            };
+            let response = await fetch(host + "/feed", request);    
+            let data = await response.json();
+            let listings = Object.entries(data);
+
+            //getting all available options
+            global_listings = []; //reset
+            listings.forEach(getAvailableListings);
+            updateDropdown();
+        }
+        function getAvailableListings([key, value]) {
+            global_listings.push(key);
+        }
+        function updateDropdown() {
+            let dropDown = document.getElementById("holding");
+            dropDown.innerHTML = ""; //clear all before populating
+            global_listings.forEach(addHoldingOption); //iterate and add to dropdown
+        }
+        function addHoldingOption(name) {
+            let option = document.createElement("option");
+            let dropDown = document.getElementById("holding");
+
+            option.textContent = name;
+            option.value = name;
+
+            dropDown.appendChild(option);
+        }
+        
+        //Strategy stuff
+        async function setStrategy() {
+            let request = {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(currentStrat)
+            };
+            let response = await fetch(host + "/feed/strategy", request);    
+        }
+        async function getStrategy() {
+            let request = {
+                method: "GET",
+            };
+            let response = await fetch(host + "/feed/strategy", request);    
+            let strat = await response.text();
+
+            let option = document.getElementById("strat")
+            option.value = strat;
+        }
+
+
+
+        //PORTFOLIO STUFF
+        async function getHoldings() {
+            let request = {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(currentUser)
+            };
+            let response = await fetch(host + "/portfolio/holdings", request);    
+            let data = await response.json();
+
+            let listings = Object.entries(data);
+            let list = document.getElementById("holdings");
+            list.innerHTML = "";
+            listings.forEach(displayHolding);
+        }
+        function displayHolding([key, value]){
+            let list = document.getElementById("holdings");
+            let li = document.createElement('li');
+            li.textContent = `${key} : ${value}`;
+            list.appendChild(li);
+        }
+        async function displayBalance(){
+            let request = {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(currentUser)
+            };
+            let response = await fetch(host + "/portfolio/balance", request);    
+            let data = await response.json();
+            
+            let cents = data;
+            let dollars = cents / 100;
+            let balanceString = `Balance: $${dollars.toFixed(2)}`;
+            let balanceDisplay = document.getElementById("balance");
+            balanceDisplay.textContent = balanceString;
+        }
+        async function displayAppraisal(){
+            let request = {
+                method: "POST", 
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(currentUser)
+            };
+            let response = await fetch(host + "/portfolio/value", request);    
+            let data = await response.json();
+            
+            let cents = data;
+            let dollars = cents / 100;
+            let appraisalString = `Holdings Value: $${dollars.toFixed(2)}`;
+            let appraisalDisplay = document.getElementById("appraisal");
+            appraisalDisplay.textContent = appraisalString;
+        }
+        async function displayTotalValue(){
+            let request = {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(currentUser)
+            };
+            let response = await fetch(host + "/portfolio/value", request);    
+            let data = await response.json();
+            let holdingCents = data;
+            
+            response = await fetch(host + "/portfolio/balance", request);    
+            data = await response.json();
+            let balanceCents = data;
+
+            let totalCents = holdingCents+balanceCents;
+            let dollars = totalCents / 100;
+            let totalString = `Total Value: $${dollars.toFixed(2)}`;
+            let totalDisplay = document.getElementById("totalValue");
+            totalDisplay.textContent = totalString;
+        }
+        
+
+
+        //PENDING ORDER STUFF
+        async function getOrders() {
+            let request = {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(currentUser)
+            };
+            let response = await fetch(host + "/portfolio/orders", request);    
+            let data = await response.json();
+
+            let listings = Object.entries(data);
+            let list = document.getElementById("orders");
+            list.innerHTML = "";
+            listings.forEach(displayOrder);
+        }
+        function displayOrder([key, value]){
+            let list = document.getElementById("orders");
+            let li = document.createElement('li');
+            let order = value;
+            let limitDollars = order.limit/100
+            li.textContent = `ORDER #${key}: ${order.side} ${order.amount} '${order.holdingName}' AT $${limitDollars.toFixed(2)}`;
+            list.appendChild(li);
+        }
+
+
+
+        //HISTORY STUFF
+        async function getHistory() {
+            let request = {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(currentUser)
+            };
+            let response = await fetch(host + "/portfolio/history", request);    
+            let data = await response.json();
+
+            let listings = Object.entries(data);
+            let list = document.getElementById("history");
+            list.innerHTML = "";
+            listings.forEach(displayTradeEvent);
+        }
+
+        function displayTradeEvent([key, value]){
+            let trade = value;
+            let pastTense = "";
+            if(trade.side=="BUY") { pastTense = "BOUGHT"; }
+            else { pastTense = "SOLD"; }
+            let dollars = trade.price/100;
+            let dateObject = new Date(trade.timestamp);
+            let dateSting = dateObject.toLocaleString();
+
+            let list = document.getElementById("history");
+            let li = document.createElement('li');
+            li.textContent = `TRADE #${key}: ${pastTense} ${trade.count} '${trade.holding}' FOR $${dollars.toFixed(2)} EACH ON ${dateSting}`;
+            list.appendChild(li);
+        }
+
+
+        
+        //ORDERING STUFF
+        async function submitBuyOrder() {
+            let orderHolding = document.getElementById("holding").value;
+
+            let orderAmount = document.getElementById("amount").value;
+            orderAmount = parseInt(orderAmount) || 1;
+
+            let orderLimit = document.getElementById("limit").value;
+            let limitFloat = parseFloat(orderLimit) || 0;
+            let limitCents = Math.round(limitFloat * 100);
+            
+            let orderType = document.querySelector('input[name="type"]:checked').value;
+            let order = {uid:currentUser, holding: orderHolding, amount: orderAmount, limit: limitCents, side: "BUY", type: orderType}
+            console.log("You entered: " + JSON.stringify(order));
+
+            let request = {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(order)
+            };
+
+            let response = await fetch(host + "/trade/order", request);
+            if (response.status == 200) {
+                console.log(response);
+            } else {
+                console.log(response);
+                alert("something went wrong :(");
+            }
+            RefreshEVERYTHING();
+        }
+        async function submitSellOrder() {
+            let orderHolding = document.getElementById("holding").value;
+
+            let orderAmount = document.getElementById("amount").value;
+            orderAmount = parseInt(orderAmount) || 1;
+
+            let orderLimit = document.getElementById("limit").value;
+            let limitFloat = parseFloat(orderLimit) || 0;
+            let limitCents = Math.round(limitFloat * 100);
+
+            let orderType = document.querySelector('input[name="type"]:checked').value;
+            let order = {uid:currentUser, holding: orderHolding, amount: orderAmount, limit: limitCents, side: "SELL", type: orderType}
+            console.log("You entered: " + JSON.stringify(order));
+
+            let request = {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(order)
+            };
+
+            let response = await fetch(host + "/trade/order", request);
+            if (response.status == 200) {
+                console.log(response);
+            } else {
+                console.log(response);
+                alert("something went wrong :(");
+            }
+            RefreshEVERYTHING();
+        }
+
+
+
+        //CALL EVERYTHING
+        function RefreshEVERYTHING(){
+            readNotifications();
+            getListings();
+            getHoldings();
+            displayBalance();
+            displayAppraisal();
+            displayTotalValue();
+            getOrders();
+            getHistory();
+            getStrategy();
+        }
+        readUser();
+        getAvailable(); //only do on page refresh
+        RefreshEVERYTHING(); //first load
+        setInterval(RefreshEVERYTHING, 5000); //every 5 seconds after
+    </script>
+</body>
+</html>

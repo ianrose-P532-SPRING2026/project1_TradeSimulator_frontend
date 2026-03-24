@@ -1,1 +1,0 @@
-# project1_TradeSimulator_frontend
